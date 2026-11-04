@@ -1,0 +1,86 @@
+services:
+  postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zipline
+      POSTGRES_DB: zipline
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:?Set POSTGRESQL_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zipline", "-d", "zipline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipline:
+    image: ghcr.io/diced/zipline:4.8.2
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./uploads:/zipline/uploads
+    networks: [internal, external]
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  analytics-gateway:
+    build:
+      context: ../../analytics-gateway
+    image: evolve-docs-analytics:1.0.0
+    restart: unless-stopped
+    env_file: .analytics.env
+    environment:
+      ZIPLINE_ORIGIN: http://zipline:3000
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 256m
+    networks: [internal, external]
+    depends_on:
+      zipline:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/analytics/api/health', timeout=5)"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [external]
+    depends_on:
+      analytics-gateway:
+        condition: service_healthy
+
+networks:
+  internal:
+    internal: true
+  external:
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Files & views — Evolve</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#182237;background:#f6f7fa;font-size:15px}
+*{box-sizing:border-box}body{margin:0}header{background:white;border-bottom:1px solid #e0e5ee;padding:22px 32px;display:flex;gap:20px;align-items:center;justify-content:space-between}h1{font-size:23px;margin:0}h2{font-size:20px;margin:0 0 20px}p{line-height:1.5}.subtle{color:#69758b;font-size:13px}main{max-width:1450px;margin:28px auto;padding:0 28px}.card{background:white;border:1px solid #e0e5ee;border-radius:12px;padding:24px;margin-bottom:22px}.toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.toolbar input[type=search]{width:320px;max-width:100%}input,button{font:inherit}input[type=text],input[type=password],input[type=search]{padding:10px 12px;border:1px solid #c9d2e0;border-radius:7px}button,.button{border:1px solid #ccd5e2;border-radius:7px;background:white;color:#1b3358;padding:9px 13px;cursor:pointer;text-decoration:none;display:inline-block;font-size:14px}button:hover,.button:hover{background:#f1f5fd}button.primary{background:#2358d6;border-color:#2358d6;color:white}button:disabled{opacity:.55;cursor:wait}a{color:#2358d6}label{display:inline-flex;align-items:center;gap:8px}input[type=checkbox]{width:18px;height:18px;accent-color:#2358d6;cursor:pointer}.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:left}th{font-size:12px;color:#66738a;font-weight:600;background:#f8fafc;white-space:nowrap}th,td{padding:15px 12px;border-bottom:1px solid #edf0f5;vertical-align:middle}td.name{min-width:210px;max-width:340px;overflow-wrap:anywhere}td.nowrap{white-space:nowrap}.actions{display:flex;gap:6px;align-items:center}.pager{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}.login{max-width:420px;margin:70px auto}.login label{display:block;margin:15px 0 5px}.login input{width:100%}.login button{margin-top:20px;width:100%}.notice{color:#526078;margin:10px 0 0;font-size:13px}.error{color:#b12738}.success{color:#227446}#toast{position:fixed;bottom:24px;right:24px;background:#172742;color:white;padding:14px 20px;border-radius:9px;max-width:90vw;display:none;z-index:10}dialog{border:1px solid #dce3ee;border-radius:12px;padding:26px;max-width:850px;width:90vw}dialog::backdrop{background:#18223766}.modal-head{display:flex;align-items:start;justify-content:space-between;gap:20px}.stats{display:flex;gap:26px;flex-wrap:wrap;padding:15px 0 20px}.stats strong{font-size:25px;display:block}.stats span{font-size:12px;color:#69758b}.hidden{display:none!important}.empty{text-align:center;color:#69758b;padding:45px}@media(max-width:650px){header{padding:18px;align-items:start;flex-direction:column}main{padding:0 14px}.card{padding:16px}h1{font-size:20px}.toolbar input[type=search]{width:100%}}
+</style>
+</head>
+<body>
+<header><div><h1>Files & views</h1><div class="subtle" id="identity">Evolve Documents</div></div><a class="button" href="/dashboard">Zipline dashboard</a></header>
+<main>
+<section id="login" class="card login hidden"><h2>Sign in</h2><p class="subtle">Use your Zipline account.</p>
+<form id="loginForm"><label for="username">Username</label><input id="username" type="text" autocomplete="username" required>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+<button class="primary">Sign in</button><p id="loginError" class="error"></p></form></section>
+<section id="workspace" class="hidden">
+<section class="card"><h2>Upload files</h2><form id="uploadForm"><div class="toolbar">
+<input type="file" id="uploads" multiple required>
+<label><input type="checkbox" id="uploadEmail">Require email to view</label>
+<button class="primary" id="uploadButton">Upload</button></div>
+<p class="notice" id="uploadStatus">You can change this setting after uploading.</p></form></section>
+<section class="card"><div class="toolbar"><input type="search" id="search" placeholder="Search files" aria-label="Search files"><button id="refresh">Refresh</button><span class="subtle" id="count"></span></div>
+<p class="notice" id="tracking"></p><p class="notice">Email addresses are not verified. Seeking within a video does not count as a new opening.</p>
+<p class="notice">Signed-in staff previews do not count as client openings. Use a private window to test client links.</p>
+<div class="scroll"><table><thead><tr><th>File</th><th>Uploaded by</th><th>Uploaded at</th><th>Require email</th><th>Openings</th><th>Last opened</th></tr></thead><tbody id="files"></tbody></table></div>
+<div class="pager"><button id="prev">← Previous</button><span id="page" class="subtle"></span><button id="next">Next →</button></div>
+</section></section><p id="pageError" class="error"></p>
+</main>
+<dialog id="history"><div class="modal-head"><h2 id="historyTitle"></h2><button id="closeHistory">Close</button></div>
+<div class="stats" id="stats"></div><div class="scroll"><table><thead><tr><th>Opened at</th><th>Entered email</th></tr></thead><tbody id="events"></tbody></table></div>
+<div class="pager"><button id="historyPrev">← Previous</button><span id="historyPage" class="subtle"></span><button id="historyNext">Next →</button></div></dialog>
+<div id="toast" role="status"></div>
+<script>
+const $=id=>document.getElementById(id);
+const state={page:1,search:'',fileRoute:'/u',historyFile:null,historyPage:1};
+function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
+function date(value){return value?new Date(value).toLocaleString('en-GB',{timeZone:'Europe/Istanbul',hour12:false}):'—'}
+function toast(text){$('toast').textContent=text;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3500)}
+async function api(path,options={}){
+ const res=await fetch('/analytics/api'+path,{credentials:'same-origin',...options});
+ let data;try{data=await res.json()}catch{throw new Error('The server is temporarily unavailable')}
+ if(!res.ok){if(res.status===401){$('workspace').classList.add('hidden');$('login').classList.remove('hidden')}const message=typeof data.detail==='string'?data.detail:typeof data.error==='string'?data.error:data.error?.message||data.message||'Request failed';throw new Error(message.replace(/^E\d+:\s*/,''))}
+ return data
+}
+async function load(){
+ $('pageError').textContent='';
+ try{const data=await api('/files?page='+state.page+'&search='+encodeURIComponent(state.search));
+ $('login').classList.add('hidden');$('workspace').classList.remove('hidden');
+ state.fileRoute=data.file_route;$('identity').textContent=data.user.username+' · timezone: Istanbul';
+ $('tracking').textContent='Opening history is recorded from '+date(data.tracking_since)+'.';
+ $('count').textContent='Files: '+data.total;$('page').textContent='Page '+data.page;
+ $('prev').disabled=state.page<=1;$('next').disabled=state.page*50>=data.total;
+ $('files').replaceChildren();
+ if(!data.files.length){const row=node('tr');const cell=node('td',state.search?'No matching files':'No files yet','empty');cell.colSpan=6;row.append(cell);$('files').append(row)}
+ for(const f of data.files){
+  const row=node('tr');const name=node('td',undefined,'name');name.append(node('strong',f.original_name||f.name),node('div',f.type,'subtle'));row.append(name);
+  row.append(node('td',f.uploaded_by),node('td',date(f.uploaded_at),'nowrap'));
+  const toggleCell=node('td');const label=node('label');const toggle=node('input');toggle.type='checkbox';toggle.checked=f.require_email;toggle.setAttribute('aria-label','Require email: '+(f.original_name||f.name));label.append(toggle,node('span',f.require_email?'Yes':'No'));toggleCell.append(label);row.append(toggleCell);
+  toggle.addEventListener('change',async()=>{toggle.disabled=true;try{await api('/files/'+encodeURIComponent(f.id)+'/policy',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({require_email:toggle.checked})});label.lastChild.textContent=toggle.checked?'Yes':'No';toast('Setting saved')}catch(e){toggle.checked=!toggle.checked;toast(e.message)}finally{toggle.disabled=false}});
+  row.append(node('td',String(f.visits)),node('td',date(f.last_opened),'nowrap'));
+  const group=node('div',undefined,'actions');group.style.marginTop='10px';const copy=node('button','Copy link');copy.onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+state.fileRoute+'/'+encodeURIComponent(f.name));toast('Link copied')}catch{toast('Could not copy the link')}};
+  const history=node('button','History');history.onclick=()=>showHistory(f.id);group.append(copy,history);name.append(group);$('files').append(row)
+ }
+ }catch(e){if($('login').classList.contains('hidden'))$('pageError').textContent=e.message}
+}
+async function showHistory(id,page=1){
+ try{const data=await api('/files/'+encodeURIComponent(id)+'/visits?page='+page);state.historyFile=id;state.historyPage=page;
+ $('historyTitle').textContent=data.file.name;$('stats').replaceChildren();
+ for(const [key,label] of [['visits','Openings'],['identified_visits','With an email address'],['unique_emails','Distinct email addresses']]){const box=node('div');box.append(node('strong',String(data.stats[key])),node('span',label));$('stats').append(box)}
+ $('events').replaceChildren();for(const event of data.visits){const row=node('tr');row.append(node('td',date(event.opened_at)),node('td',event.email||'No email'));$('events').append(row)}
+ if(!data.visits.length){const row=node('tr');const cell=node('td','No openings yet','empty');cell.colSpan=2;row.append(cell);$('events').append(row)}
+ $('historyPage').textContent='Page '+page;$('historyPrev').disabled=page<=1;$('historyNext').disabled=page*50>=data.stats.visits;
+ if(!$('history').open)$('history').showModal()
+ }catch(e){toast(e.message)}
+}
+$('loginForm').onsubmit=async event=>{event.preventDefault();$('loginError').textContent='';const button=event.currentTarget.querySelector('button');button.disabled=true;try{const data=await api('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('username').value,password:$('password').value})});if(data.totp)throw new Error('Sign in through the Zipline dashboard using two-factor authentication, then return to this page.');$('password').value='';await load()}catch(e){$('loginError').textContent=e.message}finally{button.disabled=false}};
+$('uploadForm').onsubmit=async event=>{
+ event.preventDefault();const button=$('uploadButton');button.disabled=true;const files=[...$('uploads').files];const requireEmail=$('uploadEmail').checked;let completed=0;
+ try{for(const file of files){$('uploadStatus').textContent='Uploading: '+file.name;const body=new FormData();body.append('file',file);
+ const response=await fetch('/api/upload',{method:'POST',body,credentials:'same-origin',headers:{'x-zipline-original-name':'true'}});const result=await response.json();
+ if(!response.ok)throw new Error(result.error?.message||result.message||'Could not upload the file');
+ for(const uploaded of result.files){await api('/files/'+encodeURIComponent(uploaded.id)+'/policy',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({require_email:requireEmail})});completed++}}
+ $('uploads').value='';$('uploadStatus').textContent='Files uploaded: '+completed;state.page=1;await load()
+ }catch(e){$('uploadStatus').textContent=e.message+' · successfully uploaded: '+completed}finally{button.disabled=false}
+};
+$('refresh').onclick=load;$('prev').onclick=()=>{state.page--;load()};$('next').onclick=()=>{state.page++;load()};
+let searchTimer;$('search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=$('search').value;state.page=1;load()},300)};
+$('closeHistory').onclick=()=>$('history').close();$('historyPrev').onclick=()=>showHistory(state.historyFile,state.historyPage-1);$('historyNext').onclick=()=>showHistory(state.historyFile,state.historyPage+1);
+load();
+</script>
+</body>
+</html>

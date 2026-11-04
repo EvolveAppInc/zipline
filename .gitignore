@@ -48,3 +48,14 @@ uploads*/
 *.key
 .memory.log*
 openapi.json
+
+# Evolve Documents deployment secrets and local runtime files
+**/.analytics.env
+**/secrets.json
+**/credentials.md
+*.private.json
+__pycache__/
+*.py[cod]
+.venv/
+!deploy/evolve-docs/.env.example
+!deploy/evolve-docs/.analytics.env.example

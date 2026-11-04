@@ -1,3 +1,14 @@
+# Evolve Documents
+
+This EvolveAppInc fork is based on Zipline **v4.8.2** and includes the deployed
+Evolve Documents gateway: direct file sharing, optional email entry, per-file
+opening history, uploader attribution, and an English admin interface.
+
+See [deployment and recovery](deploy/evolve-docs/README.md) and
+[gateway behavior and validation](analytics-gateway/README.md).
+The `evolve-docs` branch contains the Evolve additions. The upstream Zipline
+source and MIT license are preserved below.
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/diced/zipline/trunk/public/zipline_small.png"/>
 

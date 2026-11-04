@@ -1,0 +1,47 @@
+name: Validate Evolve gateway
+
+on:
+  push:
+    branches: [evolve-docs]
+    paths:
+      - "analytics-gateway/**"
+      - "deploy/evolve-docs/**"
+      - ".github/workflows/evolve-gateway.yml"
+  pull_request:
+    branches: [evolve-docs]
+    paths:
+      - "analytics-gateway/**"
+      - "deploy/evolve-docs/**"
+      - ".github/workflows/evolve-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check Python and dashboard JavaScript syntax
+        run: |
+          python3 -m py_compile analytics-gateway/app.py analytics-gateway/test_live.py deploy/evolve-docs/make_analytics_env.py
+          python3 - <<'PY' | node --check
+          from html.parser import HTMLParser
+          from pathlib import Path
+          class Scripts(HTMLParser):
+              inside = False
+              def handle_starttag(self, tag, attrs):
+                  self.inside = tag == "script" or self.inside
+              def handle_endtag(self, tag):
+                  if tag == "script":
+                      self.inside = False
+              def handle_data(self, data):
+                  if self.inside:
+                      print(data)
+          Scripts().feed(Path("analytics-gateway/dashboard.html").read_text())
+          PY
+      - name: Validate deployment configuration
+        run: docker compose --env-file deploy/evolve-docs/.env.example -f deploy/evolve-docs/compose.yaml config --no-env-resolution -q
+      - name: Build gateway with locked dependencies
+        run: docker build -t evolve-docs-analytics:ci analytics-gateway

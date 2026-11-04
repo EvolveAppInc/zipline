@@ -1,0 +1,14 @@
+{$PUBLIC_DOMAIN} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        X-Robots-Tag "noindex, nofollow"
+        -Server
+    }
+    @analytics_api path /analytics/gate /analytics/api/*
+    request_body @analytics_api {
+        max_size 64KB
+    }
+    reverse_proxy analytics-gateway:8080
+}
