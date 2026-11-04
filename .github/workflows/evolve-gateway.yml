@@ -42,6 +42,9 @@ jobs:
           Scripts().feed(Path("analytics-gateway/dashboard.html").read_text())
           PY
       - name: Validate deployment configuration
-        run: docker compose --env-file deploy/evolve-docs/.env.example -f deploy/evolve-docs/compose.yaml config --no-env-resolution -q
+        run: |
+          cp deploy/evolve-docs/.env.example deploy/evolve-docs/.env
+          cp deploy/evolve-docs/.analytics.env.example deploy/evolve-docs/.analytics.env
+          docker compose --env-file deploy/evolve-docs/.env.example -f deploy/evolve-docs/compose.yaml config -q
       - name: Build gateway with locked dependencies
         run: docker build -t evolve-docs-analytics:ci analytics-gateway
