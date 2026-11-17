@@ -16,7 +16,10 @@ services:
       retries: 5
 
   zipline:
-    image: ghcr.io/diced/zipline:4.8.2
+    image: evolve-docs-zipline:4.8.2-session-fix
+    build:
+      context: ../..
+      dockerfile: deploy/evolve-docs/Dockerfile.zipline
     restart: unless-stopped
     env_file: .env
     ports:

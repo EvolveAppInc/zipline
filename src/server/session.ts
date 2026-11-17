@@ -7,17 +7,10 @@ import { randomCharacters } from '@/lib/random';
 import { fastifyCookie } from '@fastify/cookie';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { IncomingMessage, ServerResponse } from 'http';
-import { getIronSession, type SessionOptions } from 'iron-session';
+import { getIronSession } from 'iron-session';
 import { and, eq } from 'drizzle-orm';
 import { parseUserToken } from './middleware/user';
-
-const cookieOptions: NonNullable<SessionOptions['cookieOptions']> = {
-  maxAge: 60 * 60 * 24 * 14,
-  expires: new Date(Date.now() + 60 * 60 * 24 * 14 * 1000),
-  path: '/',
-  sameSite: 'lax',
-  httpOnly: true,
-};
+import { cookieOptions } from './session-cookie-options';
 
 export type ZiplineSession = {
   id: string | null;
