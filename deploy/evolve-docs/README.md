@@ -1,8 +1,8 @@
 # Deploy Evolve Documents
 
 The tested stack is Zipline 4.8.2, PostgreSQL 16, Caddy 2.10.2, and the Evolve
-analytics gateway. The gateway is built from this fork; the native Zipline image
-is pinned to the upstream release used in the audited deployment.
+analytics gateway. The gateway is built from this fork. The Zipline image uses
+the audited upstream 4.8.2 release with the session-cookie correction described below.
 
 The sample Compose stack is for a new installation. For the existing EC2
 deployment, use the update instructions below to keep its database, volumes,
@@ -82,3 +82,30 @@ gateway. Bind Zipline and the gateway to localhost; expose only Caddy publicly.
 
 Production credentials, account/resource IDs, client files, database dumps,
 cookies, and audit output are not part of this repository.
+
+## Session cookie fix (2026-11-17)
+
+Upstream 4.8.2 created a cookie's absolute expiration date once at module load.
+After 14 days of uptime, iron-session rejected new logins because that date was
+in the past. The fork uses the existing relative `maxAge` and retains HttpOnly,
+Secure, SameSite=Lax, and the original session lifetime.
+
+`Dockerfile.zipline` applies this equivalent correction to the pinned release's
+compiled session module and runs the regression test during the build. The patch
+requires exactly one matching cookie block and verifies its original 14-day
+lifetime before changing it. The regression advances the clock by 21 days, saves
+and reads a new session, then checks that it still expires after its normal lifetime.
+The ordinary root Dockerfile also includes the corrected TypeScript source when
+building Zipline from this fork.
+
+To build the release-based image, run from the repository root:
+
+```sh
+docker build -f deploy/evolve-docs/Dockerfile.zipline -t evolve-docs-zipline:4.8.2-session-fix .
+```
+
+On the existing EC2 deployment, this build context is retained under
+`/opt/zipline/session-hotfix`. The `zipline` service in `compose.override.yaml`
+selects `evolve-docs-zipline:4.8.2-session-fix` and its build context, so normal
+Compose recreation retains the fix. Preserve that context and override during
+recovery; database and S3 objects are unaffected.

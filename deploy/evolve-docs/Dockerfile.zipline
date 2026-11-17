@@ -1,0 +1,6 @@
+FROM ghcr.io/diced/zipline:4.8.2
+COPY deploy/evolve-docs/patch-session-cookie.mjs /zipline/evolve/patch-session-cookie.mjs
+COPY src/server/session-cookie-options.ts /zipline/src/server/session-cookie-options.ts
+COPY tests/sessionCookies.ts /zipline/tests/sessionCookies.ts
+RUN node /zipline/evolve/patch-session-cookie.mjs \
+    && node --import tsx --test /zipline/tests/sessionCookies.ts
