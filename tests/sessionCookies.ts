@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { test } from 'node:test';
 import { getIronSession } from 'iron-session';
-import { cookieOptions } from '../src/server/session-cookie-options';
+import { cookieOptions } from '../src/server/session-cookie-options.js';
 
 function context(cookie = '') {
   const headers = new Map<string, string | string[]>();
@@ -25,8 +25,15 @@ test('saving a session still works after more than 14 days of process uptime', a
     cookieOptions: { ...cookieOptions, secure: true },
   });
   session.id = 'synthetic-user';
+  const legacyContext = context();
+  const legacy = await getIronSession(legacyContext.request, legacyContext.response, {
+    password,
+    cookieName: 'zipline_session',
+    cookieOptions: { ...cookieOptions, expires: new Date(Date.now() + 14 * 86400 * 1000) },
+  });
 
   t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 21 * 86400 * 1000 });
+  await assert.rejects(legacy.save(), /expires is in the past/);
   await session.save();
   const header = String(headers.get('set-cookie'));
   assert.match(header, /Max-Age=1209600/i);
