@@ -1,0 +1,10 @@
+[Unit]
+Description=Evolve Documents database and local upload snapshot
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/SRV/doc
+ExecStart=/SRV/doc/backup.sh
+UMask=0077

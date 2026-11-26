@@ -6,10 +6,12 @@ through Zipline's authenticated API in the finally block.
 from http.cookies import SimpleCookie
 from html.parser import HTMLParser
 import json
+import ipaddress
 import os
 from pathlib import Path
 import subprocess
 import sys
+import socket
 import time
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
@@ -17,6 +19,19 @@ from urllib.request import Request, urlopen
 import uuid
 
 BASE = os.environ.get("GATEWAY_TEST_URL", "http://127.0.0.1:8080")
+ORIGIN = os.environ.get("GATEWAY_TEST_ORIGIN", "https://doc.evolveplatform.ai")
+ROOT = Path(os.environ.get("GATEWAY_DEPLOYMENT_DIR", "/opt/zipline"))
+connect_ip = os.environ.get("GATEWAY_TEST_CONNECT_IP")
+if connect_ip:
+    ipaddress.ip_address(connect_ip)
+    public_host = urlsplit(BASE).hostname
+    original_getaddrinfo = socket.getaddrinfo
+
+    def test_getaddrinfo(host, *args, **kwargs):
+        return original_getaddrinfo(connect_ip if host == public_host else host, *args, **kwargs)
+
+    socket.getaddrinfo = test_getaddrinfo
+
 admin = {}
 visitor = {}
 rows = []
@@ -25,7 +40,7 @@ rows = []
 def request(path, data=None, method="GET", cookies=None, headers=None):
     headers = dict(headers or {})
     if method not in ("GET", "HEAD"):
-        headers.setdefault("Origin", "https://doc.evolveplatform.ai")
+        headers.setdefault("Origin", ORIGIN)
     if cookies:
         headers["Cookie"] = "; ".join(k + "=" + v for k, v in cookies.items())
     if isinstance(data, dict):
@@ -85,11 +100,15 @@ status, _, _ = request("/analytics/api/files")
 check("file metadata requires authentication", status == 401)
 status, _, _ = request("/analytics/api/health")
 check("gateway and upstream healthy", status == 200)
-s = json.loads(subprocess.check_output([
-    "aws", "ssm", "get-parameter", "--region", "eu-north-1",
-    "--name", "/evolve-docs/zipline/secrets", "--with-decryption",
-    "--query", "Parameter.Value", "--output", "text",
-]))
+credential_file = os.environ.get("GATEWAY_TEST_CREDENTIALS_FILE")
+if credential_file:
+    s = json.loads(Path(credential_file).read_text())
+else:
+    s = json.loads(subprocess.check_output([
+        "aws", "ssm", "get-parameter", "--region", "eu-north-1",
+        "--name", "/evolve-docs/zipline/secrets", "--with-decryption",
+        "--query", "Parameter.Value", "--output", "text",
+    ]))
 status, _, body = request("/analytics/api/login",
     {"username": s["admin_username"], "password": s["admin_password"]}, method="POST", cookies=admin)
 check("native administrator authentication", status == 200 and "zipline_session" in admin)
@@ -110,7 +129,7 @@ try:
         if number == 1:
             name = "evolve-analytics-url?segment-" + uuid.uuid4().hex + ".txt"
         if number == 2:
-            temporary = Path("/opt/zipline/uploads/.evolve-test-" + uuid.uuid4().hex + ".mp4")
+            temporary = ROOT / "uploads" / (".evolve-test-" + uuid.uuid4().hex + ".mp4")
             try:
                 subprocess.run(["docker", "compose", "exec", "-T", "zipline", "ffmpeg",
                     "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
@@ -296,6 +315,8 @@ with psycopg.connect(os.environ['DATABASE_URL']) as conn:
     check("staff can upload a file", status == 200)
     staff_file = json.loads(body)["files"][0]
     files.append(staff_file)
+    status, _, body = request(urlsplit(staff_file["url"]).path, cookies={})
+    check("new staff uploads also use direct file links", status == 200 and body == contents)
     status, _, body = request("/analytics/api/files", cookies=staff)
     own_listing = json.loads(body)
     check("staff see only their own files",
@@ -326,5 +347,5 @@ finally:
         status, _, _ = request("/api/users/" + staff_user["id"], {"delete": False},
             method="DELETE", cookies=admin)
         check("temporary staff account removed", status == 200)
-    Path("/opt/zipline/analytics-verification.json").write_text(json.dumps(rows, indent=2) + "\n")
+    (ROOT / "analytics-verification.json").write_text(json.dumps(rows, indent=2) + "\n")
 print("All analytics integration checks passed.")

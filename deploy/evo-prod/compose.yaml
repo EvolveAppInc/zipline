@@ -1,0 +1,83 @@
+name: evolve-docs
+
+services:
+  postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zipline
+      POSTGRES_DB: zipline
+      POSTGRES_PASSWORD: ${POSTGRESQL_PASSWORD:?Set POSTGRESQL_PASSWORD}
+    command: ["postgres", "-c", "shared_buffers=16MB", "-c", "max_connections=30"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 160m
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zipline", "-d", "zipline"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zipline:
+    image: evolve-docs-zipline:4.8.2-session-fix
+    build:
+      context: .
+      dockerfile: deploy/evolve-docs/Dockerfile.zipline
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_OPTIONS: --max-old-space-size=192
+    ports:
+      - "127.0.0.1:13000:3000"
+    volumes:
+      - ./uploads:/zipline/uploads
+      - ./public:/zipline/public
+      - ./themes:/zipline/themes
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    mem_limit: 384m
+    networks: [internal, egress]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/healthcheck"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  analytics-gateway:
+    image: evolve-docs-analytics:1.0.0
+    build: ./analytics-gateway
+    restart: unless-stopped
+    env_file: .analytics.env
+    environment:
+      ZIPLINE_ORIGIN: http://zipline:3000
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      zipline:
+        condition: service_healthy
+    mem_limit: 128m
+    networks:
+      internal:
+      frontend:
+        aliases: [evolve-docs-gateway]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/analytics/api/health', timeout=5)"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+networks:
+  internal:
+    internal: true
+  egress:
+  frontend:
+    external: true
+    name: ${NGINX_NETWORK:-srv_lms-net}
+
+volumes:
+  pgdata:

@@ -6,14 +6,16 @@ on:
     paths:
       - "analytics-gateway/**"
       - "deploy/evolve-docs/**"
+      - "deploy/evo-prod/**"
       - "src/server/session*.ts"
       - "tests/sessionCookies.ts"
       - ".github/workflows/evolve-gateway.yml"
   pull_request:
-    branches: [evolve-docs]
+    branches: [evolve-docs, fix/session-cookie-expiry]
     paths:
       - "analytics-gateway/**"
       - "deploy/evolve-docs/**"
+      - "deploy/evo-prod/**"
       - "src/server/session*.ts"
       - "tests/sessionCookies.ts"
       - ".github/workflows/evolve-gateway.yml"
@@ -29,7 +31,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Check Python and dashboard JavaScript syntax
         run: |
-          python3 -m py_compile analytics-gateway/app.py analytics-gateway/test_live.py deploy/evolve-docs/make_analytics_env.py
+          python3 -m py_compile analytics-gateway/app.py analytics-gateway/test_live.py deploy/evolve-docs/make_analytics_env.py deploy/evo-prod/bootstrap.py
+          bash -n deploy/evo-prod/backup.sh
           python3 - <<'PY' | node --check
           from html.parser import HTMLParser
           from pathlib import Path
@@ -50,6 +53,9 @@ jobs:
           cp deploy/evolve-docs/.env.example deploy/evolve-docs/.env
           cp deploy/evolve-docs/.analytics.env.example deploy/evolve-docs/.analytics.env
           docker compose --env-file deploy/evolve-docs/.env.example -f deploy/evolve-docs/compose.yaml config -q
+          cp deploy/evo-prod/.env.example deploy/evo-prod/.env
+          cp deploy/evo-prod/.analytics.env.example deploy/evo-prod/.analytics.env
+          docker compose --env-file deploy/evo-prod/.env.example -f deploy/evo-prod/compose.yaml config -q
       - name: Build gateway with locked dependencies
         run: docker build -t evolve-docs-analytics:ci analytics-gateway
       - name: Build Zipline session fix and test long uptime
