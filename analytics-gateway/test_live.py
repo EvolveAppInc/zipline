@@ -17,6 +17,8 @@ from urllib.request import Request, urlopen
 import uuid
 
 BASE = os.environ.get("GATEWAY_TEST_URL", "http://127.0.0.1:8080")
+ORIGIN = os.environ.get("GATEWAY_TEST_ORIGIN", "https://doc.evolveplatform.ai")
+ROOT = Path(os.environ.get("GATEWAY_DEPLOYMENT_DIR", "/opt/zipline"))
 admin = {}
 visitor = {}
 rows = []
@@ -25,7 +27,7 @@ rows = []
 def request(path, data=None, method="GET", cookies=None, headers=None):
     headers = dict(headers or {})
     if method not in ("GET", "HEAD"):
-        headers.setdefault("Origin", "https://doc.evolveplatform.ai")
+        headers.setdefault("Origin", ORIGIN)
     if cookies:
         headers["Cookie"] = "; ".join(k + "=" + v for k, v in cookies.items())
     if isinstance(data, dict):
@@ -85,11 +87,15 @@ status, _, _ = request("/analytics/api/files")
 check("file metadata requires authentication", status == 401)
 status, _, _ = request("/analytics/api/health")
 check("gateway and upstream healthy", status == 200)
-s = json.loads(subprocess.check_output([
-    "aws", "ssm", "get-parameter", "--region", "eu-north-1",
-    "--name", "/evolve-docs/zipline/secrets", "--with-decryption",
-    "--query", "Parameter.Value", "--output", "text",
-]))
+credential_file = os.environ.get("GATEWAY_TEST_CREDENTIALS_FILE")
+if credential_file:
+    s = json.loads(Path(credential_file).read_text())
+else:
+    s = json.loads(subprocess.check_output([
+        "aws", "ssm", "get-parameter", "--region", "eu-north-1",
+        "--name", "/evolve-docs/zipline/secrets", "--with-decryption",
+        "--query", "Parameter.Value", "--output", "text",
+    ]))
 status, _, body = request("/analytics/api/login",
     {"username": s["admin_username"], "password": s["admin_password"]}, method="POST", cookies=admin)
 check("native administrator authentication", status == 200 and "zipline_session" in admin)
@@ -110,7 +116,7 @@ try:
         if number == 1:
             name = "evolve-analytics-url?segment-" + uuid.uuid4().hex + ".txt"
         if number == 2:
-            temporary = Path("/opt/zipline/uploads/.evolve-test-" + uuid.uuid4().hex + ".mp4")
+            temporary = ROOT / "uploads" / (".evolve-test-" + uuid.uuid4().hex + ".mp4")
             try:
                 subprocess.run(["docker", "compose", "exec", "-T", "zipline", "ffmpeg",
                     "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
@@ -326,5 +332,5 @@ finally:
         status, _, _ = request("/api/users/" + staff_user["id"], {"delete": False},
             method="DELETE", cookies=admin)
         check("temporary staff account removed", status == 200)
-    Path("/opt/zipline/analytics-verification.json").write_text(json.dumps(rows, indent=2) + "\n")
+    (ROOT / "analytics-verification.json").write_text(json.dumps(rows, indent=2) + "\n")
 print("All analytics integration checks passed.")

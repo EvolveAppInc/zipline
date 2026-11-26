@@ -1,0 +1,45 @@
+upstream evolve_documents {
+    zone evolve_documents 64k;
+    server evolve-docs-gateway:8080 resolve;
+    keepalive 16;
+}
+
+# HTTP redirect and ACME handling are inherited from *.evolveapp.org.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name doc.evolveapp.org;
+    server_tokens off;
+
+    ssl_certificate /etc/letsencrypt/live/evolveapp.org-latest/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/evolveapp.org-latest/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 2g;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+    proxy_redirect off;
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    location /analytics/ {
+        client_max_body_size 64k;
+        proxy_pass http://evolve_documents;
+    }
+
+    location / {
+        proxy_pass http://evolve_documents;
+    }
+}
