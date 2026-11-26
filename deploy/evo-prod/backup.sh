@@ -9,7 +9,7 @@ chmod 700 backups
 work=$(mktemp -d /SRV/doc/backups/.snapshot-XXXXXX)
 trap 'rm -rf "$work"' EXIT
 docker compose exec -T postgresql pg_dump -U zipline -d zipline -Fc > "$work/database.dump"
-cp .env .analytics.env compose.yaml SOURCE.json credentials.private.json "$work/"
+cp .env .analytics.env compose.yaml SOURCE.json credentials.private.json direct-links.sql "$work/"
 if [ -f /SRV/nginx/templates/doc.conf.template ]; then
     cp /SRV/nginx/templates/doc.conf.template "$work/"
 fi

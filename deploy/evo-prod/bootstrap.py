@@ -1,16 +1,22 @@
 """Initialize a fresh, privately listening Zipline instance without printing credentials."""
 import json
+import subprocess
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 credentials = json.loads(Path("credentials.private.json").read_text())
 origin = "http://127.0.0.1:13000"
+with Path("direct-links.sql").open("rb") as sql:
+    subprocess.run([
+        "docker", "compose", "exec", "-T", "postgresql", "psql",
+        "-U", "zipline", "-d", "zipline", "-v", "ON_ERROR_STOP=1",
+    ], stdin=sql, stdout=subprocess.DEVNULL, check=True)
 try:
     with urlopen(origin + "/api/setup", timeout=30) as response:
         first = json.load(response)["firstSetup"]
 except HTTPError as error:
-    if error.code == 400 and json.loads(error.read()).get("code") == 9001:
+    if error.code == 403 and json.loads(error.read()).get("code") == 9001:
         print("Initial setup already completed.")
         raise SystemExit(0)
     raise
@@ -30,4 +36,5 @@ with urlopen(request, timeout=30) as response:
     assert result["firstSetup"] is False
     assert result["user"]["username"] == credentials["admin_username"]
     assert result["user"]["role"] == "SUPERADMIN"
+    assert result["user"]["view"]["disableTextFiles"] is True
 print("Fresh administrator initialized.")

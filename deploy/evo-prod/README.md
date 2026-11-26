@@ -23,6 +23,10 @@ gateway joins the existing nginx network using `evolve-docs-gateway`.
 PostgreSQL is private, and native Zipline and gateway maintenance ports bind
 to localhost at 13000 and 18080. Container memory limits total 672 MiB.
 
+Initial setup also sets direct file links as the default for new uploading
+accounts, including text files, so recipients get the email form and file
+without a separate Zipline viewer.
+
 Build and initialize before exposing the service:
 
 ```sh
@@ -57,6 +61,11 @@ GATEWAY_TEST_CREDENTIALS_FILE=/SRV/doc/credentials.private.json \
 GATEWAY_DEPLOYMENT_DIR=/SRV/doc \
 python3 analytics-gateway/test_live.py
 ```
+
+If the server's resolver still caches an earlier DNS miss, add
+`GATEWAY_TEST_CONNECT_IP=127.0.0.1`. This keeps the public Host and TLS
+certificate verification while connecting through the local nginx listener.
+Verify public DNS and HTTPS separately from outside the server.
 
 Daily local snapshots include the database, upload files, environment secrets,
 configuration and administrator credentials. They have root-only permissions

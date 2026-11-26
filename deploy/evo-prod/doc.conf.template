@@ -34,6 +34,11 @@ server {
     proxy_buffering off;
     proxy_request_buffering off;
 
+    location = /analytics {
+        client_max_body_size 64k;
+        proxy_pass http://evolve_documents;
+    }
+
     location /analytics/ {
         client_max_body_size 64k;
         proxy_pass http://evolve_documents;
